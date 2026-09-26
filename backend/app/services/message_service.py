@@ -14,23 +14,27 @@ Flow:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.integrations.n8n import N8NClient
+from app.models.activity import LeadActivity
 from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.lead import Lead
 from app.models.message import Message
-from app.models.activity import LeadActivity
 from app.schemas.extraction import ExtractionResult
 from app.schemas.message import MessageCreate, MessageResponse
 from app.services.extraction_service import ExtractionService
 from app.services.qualification_service import QualificationService
+
+logger = logging.getLogger(__name__)
 
 
 class MessageService:
@@ -46,11 +50,18 @@ class MessageService:
             existing = await self._find_by_external_id(payload.external_message_id)
             if existing:
                 bot = await self._latest_bot_message(existing.conversation_id)
+                lead_id = None
+                conv_result = await self.session.execute(
+                    select(Conversation).where(Conversation.id == existing.conversation_id)
+                )
+                conv = conv_result.scalar_one_or_none()
+                if conv and conv.lead_id:
+                    lead_id = str(conv.lead_id)
                 return MessageResponse(
                     conversation_id=str(existing.conversation_id),
                     message_id=str(existing.id),
                     response=bot.content if bot else None,
-                    lead_id=str(existing.conversation.lead_id) if existing.conversation and existing.conversation.lead_id else None,
+                    lead_id=lead_id,
                 )
 
         # 2. Resolve conversation / customer / lead
@@ -116,7 +127,10 @@ class MessageService:
         )
 
         # 7. Bot response
-        bot_text = extraction.response or "Thank you for your message. A sales agent will follow up shortly."
+        bot_text = (
+            extraction.response
+            or "Thank you for your message. A sales agent will follow up shortly."
+        )
         bot_msg = Message(
             id=uuid.uuid4(),
             conversation_id=conversation.id,
@@ -150,9 +164,8 @@ class MessageService:
                     "schema_version": "1.0",
                 },
             )
-        except Exception:
-            # n8n optional for local demo — never fail the customer response
-            pass
+        except Exception as exc:
+            logger.warning("n8n webhook failed (non-blocking): %s", exc)
 
         return MessageResponse(
             conversation_id=str(conversation.id),
