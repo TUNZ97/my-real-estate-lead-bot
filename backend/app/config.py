@@ -25,8 +25,9 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/leadbot"
-    DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@localhost:5432/leadbot"
+    # MySQL (local development)
+    DATABASE_URL: str = "mysql+aiomysql://root:password@localhost:3306/leadbot"
+    DATABASE_URL_SYNC: str = "mysql+pymysql://root:password@localhost:3306/leadbot"
 
     JWT_SECRET: str = "change-me"
     JWT_ALGORITHM: str = "HS256"
