@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -13,14 +12,14 @@ from app.db.base import Base
 class Conversation(Base):
     __tablename__ = "conversations"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    customer_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    customer_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("customers.id"), nullable=False, index=True
     )
-    lead_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("leads.id"), nullable=True, index=True
+    lead_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("leads.id"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(
         String(50), default="ACTIVE"
