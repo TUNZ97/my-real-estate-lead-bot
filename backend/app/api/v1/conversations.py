@@ -1,7 +1,5 @@
 """Conversation endpoints."""
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +14,7 @@ router = APIRouter()
 
 @router.get("/{conversation_id}")
 async def get_conversation(
-    conversation_id: UUID,
+    conversation_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     result = await session.execute(
@@ -28,9 +26,9 @@ async def get_conversation(
     if not conv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     return {
-        "id": str(conv.id),
-        "customer_id": str(conv.customer_id),
-        "lead_id": str(conv.lead_id) if conv.lead_id else None,
+        "id": conv.id,
+        "customer_id": conv.customer_id,
+        "lead_id": conv.lead_id,
         "status": conv.status,
         "channel": conv.channel,
         "created_at": conv.created_at.isoformat() if conv.created_at else None,
@@ -39,7 +37,7 @@ async def get_conversation(
 
 @router.get("/{conversation_id}/messages")
 async def list_messages(
-    conversation_id: UUID,
+    conversation_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     result = await session.execute(
@@ -51,7 +49,7 @@ async def list_messages(
     return {
         "items": [
             {
-                "id": str(m.id),
+                "id": m.id,
                 "sender_type": m.sender_type,
                 "content": m.content,
                 "created_at": m.created_at.isoformat() if m.created_at else None,

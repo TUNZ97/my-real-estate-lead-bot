@@ -1,16 +1,4 @@
-"""Message intake service — core vertical slice.
-
-Flow:
-1. Idempotency check (external_message_id)
-2. Resolve / create customer, conversation, lead
-3. Persist customer message (immutable)
-4. Extract requirements (rule-based / AI)
-5. Update lead with validated extraction
-6. Run deterministic qualification
-7. Persist bot response message
-8. Optionally notify n8n for downstream workflows
-9. Return response to caller
-"""
+"""Message intake service — core vertical slice (MySQL)."""
 
 from __future__ import annotations
 
@@ -21,7 +9,6 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.integrations.n8n import N8NClient
 from app.models.activity import LeadActivity
@@ -45,7 +32,6 @@ class MessageService:
         self.n8n = N8NClient()
 
     async def process_message(self, payload: MessageCreate) -> MessageResponse:
-        # 1. Idempotency
         if payload.external_message_id:
             existing = await self._find_by_external_id(payload.external_message_id)
             if existing:
@@ -56,20 +42,18 @@ class MessageService:
                 )
                 conv = conv_result.scalar_one_or_none()
                 if conv and conv.lead_id:
-                    lead_id = str(conv.lead_id)
+                    lead_id = conv.lead_id
                 return MessageResponse(
-                    conversation_id=str(existing.conversation_id),
-                    message_id=str(existing.id),
+                    conversation_id=existing.conversation_id,
+                    message_id=existing.id,
                     response=bot.content if bot else None,
                     lead_id=lead_id,
                 )
 
-        # 2. Resolve conversation / customer / lead
         conversation, lead, customer = await self._resolve_context(payload)
 
-        # 3. Persist customer message
         customer_msg = Message(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             conversation_id=conversation.id,
             sender_type="CUSTOMER",
             content=payload.message,
@@ -78,13 +62,9 @@ class MessageService:
         self.session.add(customer_msg)
         await self.session.flush()
 
-        # 4. Extract
         extraction: ExtractionResult = self.extractor.extract(payload.message)
-
-        # 5. Update lead
         self._apply_extraction(lead, extraction)
 
-        # 6. Qualify
         qual = self.qualifier.calculate(
             {
                 "intent": lead.intent,
@@ -109,16 +89,15 @@ class MessageService:
         elif lead.status == "NEW":
             lead.status = "CONTACTED"
 
-        # Activity log
         self.session.add(
             LeadActivity(
-                id=uuid.uuid4(),
+                id=str(uuid.uuid4()),
                 lead_id=lead.id,
                 actor_type="SYSTEM",
                 activity_type="MESSAGE_PROCESSED",
                 description="Customer message processed and lead updated",
                 payload={
-                    "message_id": str(customer_msg.id),
+                    "message_id": customer_msg.id,
                     "qualification_score": qual.score,
                     "qualification_level": qual.qualification_level,
                     "missing": extraction.missing_information,
@@ -126,31 +105,28 @@ class MessageService:
             )
         )
 
-        # 7. Bot response
         bot_text = (
             extraction.response
             or "Thank you for your message. A sales agent will follow up shortly."
         )
         bot_msg = Message(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             conversation_id=conversation.id,
             sender_type="BOT",
             content=bot_text,
         )
         self.session.add(bot_msg)
-
         await self.session.flush()
 
-        # 8. Fire-and-forget n8n (best effort — does not block response)
         try:
             await self.n8n.trigger_workflow(
                 "webhook/lead-intake",
                 {
                     "event_id": str(uuid.uuid4()),
-                    "correlation_id": str(customer_msg.id),
-                    "lead_id": str(lead.id),
-                    "conversation_id": str(conversation.id),
-                    "message_id": str(customer_msg.id),
+                    "correlation_id": customer_msg.id,
+                    "lead_id": lead.id,
+                    "conversation_id": conversation.id,
+                    "message_id": customer_msg.id,
                     "message": payload.message,
                     "channel": payload.channel or "web",
                     "extraction": extraction.model_dump(),
@@ -168,10 +144,10 @@ class MessageService:
             logger.warning("n8n webhook failed (non-blocking): %s", exc)
 
         return MessageResponse(
-            conversation_id=str(conversation.id),
-            message_id=str(customer_msg.id),
+            conversation_id=conversation.id,
+            message_id=customer_msg.id,
             response=bot_text,
-            lead_id=str(lead.id),
+            lead_id=lead.id,
         )
 
     async def _find_by_external_id(self, external_id: str) -> Optional[Message]:
@@ -180,7 +156,7 @@ class MessageService:
         )
         return result.scalar_one_or_none()
 
-    async def _latest_bot_message(self, conversation_id: uuid.UUID) -> Optional[Message]:
+    async def _latest_bot_message(self, conversation_id: str) -> Optional[Message]:
         result = await self.session.execute(
             select(Message)
             .where(
@@ -216,7 +192,7 @@ class MessageService:
             customer = customer_result.scalar_one()
             if not lead:
                 lead = Lead(
-                    id=uuid.uuid4(),
+                    id=str(uuid.uuid4()),
                     customer_id=customer.id,
                     status="NEW",
                 )
@@ -225,8 +201,7 @@ class MessageService:
                 conversation.lead_id = lead.id
             return conversation, lead, customer
 
-        # New conversation path
-        customer = Customer(id=uuid.uuid4())
+        customer = Customer(id=str(uuid.uuid4()))
         if payload.customer_id:
             result = await self.session.execute(
                 select(Customer).where(Customer.id == payload.customer_id)
@@ -241,12 +216,12 @@ class MessageService:
 
         await self.session.flush()
 
-        lead = Lead(id=uuid.uuid4(), customer_id=customer.id, status="NEW")
+        lead = Lead(id=str(uuid.uuid4()), customer_id=customer.id, status="NEW")
         self.session.add(lead)
         await self.session.flush()
 
         conversation = Conversation(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             customer_id=customer.id,
             lead_id=lead.id,
             status="ACTIVE",

@@ -1,42 +1,54 @@
-# Setup & Run Guide — Real Estate Lead Bot
+# Setup & Run Guide — Local MySQL (no Docker)
 
-Follow these steps on your machine so frontend, backend, Postgres and n8n work together.
+This guide uses **MySQL on your PC**, **Python** for the backend, and **npm** for the frontend and n8n. Docker is not required for development.
 
 ---
 
 ## 1. Prerequisites
 
 - Python 3.11+
-- Node.js 20 LTS
-- Docker (for Postgres) **or** a local PostgreSQL 15+
-- n8n (`npm install -g n8n` or use Docker)
+- Node.js 20 LTS + npm
+- **MySQL** running locally (MySQL Workbench / XAMPP / WAMP / standalone)
+- n8n via npm: `npm install -g n8n`
 
 ---
 
-## 2. Clone & env
+## 2. Create the MySQL database
+
+Open MySQL (CLI or Workbench) and run:
+
+```sql
+CREATE DATABASE leadbot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Note your MySQL username and password (often `root` and a password you set, or empty on some XAMPP installs).
+
+---
+
+## 3. Clone & configure env
 
 ```bash
-git clone https://github.com/TUNZ97/my-real-estate-lead-bot.git
+git pull origin main
 cd my-real-estate-lead-bot
 cp .env.example .env
 ```
 
-Edit `.env` if needed. Defaults work for local Docker Postgres:
+Edit `.env` and set your MySQL credentials:
 
 ```text
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/leadbot
-DATABASE_URL_SYNC=postgresql://postgres:postgres@localhost:5432/leadbot
+DATABASE_URL=mysql+aiomysql://root:YOUR_PASSWORD@localhost:3306/leadbot
+DATABASE_URL_SYNC=mysql+pymysql://root:YOUR_PASSWORD@localhost:3306/leadbot
 ```
 
----
+Examples:
+- Password is `secret`: `mysql+aiomysql://root:secret@localhost:3306/leadbot`
+- No password (XAMPP default sometimes): `mysql+aiomysql://root@localhost:3306/leadbot`
 
-## 3. Start PostgreSQL
+Also copy the same values into `backend/.env` **or** keep a single `.env` at the repo root and run uvicorn from `backend` with env loaded (pydantic-settings looks for `.env` in the working directory — easiest is to put `.env` inside `backend/` as well):
 
 ```bash
-docker compose up -d postgres
+cp .env backend/.env
 ```
-
-Wait a few seconds until healthy.
 
 ---
 
@@ -54,21 +66,22 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-# Run migrations
+# Create tables
 alembic upgrade head
 
 # Start API
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Check: http://localhost:8000/health  → `{"status":"ok",...}`  
-Swagger: http://localhost:8000/docs
+Check:
+- http://localhost:8000/health
+- http://localhost:8000/docs
 
 ---
 
-## 5. Frontend
+## 5. Frontend (npm)
 
-Open a **new terminal**:
+New terminal:
 
 ```bash
 cd frontend
@@ -76,72 +89,60 @@ npm install
 npm run dev
 ```
 
-Open: http://localhost:5173
-
-- **Customer Chat** — send enquiries (orange/yellow UI)
-- **Sales Dashboard** — see leads created by the chat
+Open: **http://localhost:5173**
 
 ---
 
-## 6. n8n (optional but recommended)
+## 6. n8n (npm)
+
+New terminal:
 
 ```bash
 n8n start
 ```
 
-Open: http://localhost:5678
+Open: **http://localhost:5678**
 
-### Minimal WF-001 webhook
+Create a workflow:
+1. **Webhook** node → Method `POST` → Path `lead-intake`
+2. Activate the workflow
+3. URL will be `http://localhost:5678/webhook/lead-intake`
 
-1. New workflow → **Webhook** node  
-   - Method: `POST`  
-   - Path: `lead-intake`  
-   - URL becomes: `http://localhost:5678/webhook/lead-intake`
-2. Add a **Set** or **Respond to Webhook** node so you can see the payload
-3. Activate the workflow
-
-FastAPI already posts to that URL after every message (best-effort).  
-If n8n is down, chat still works.
-
-See `n8n/workflows/WF-001-lead-intake.md` for full payload shape and next steps (Slack/email on HIGH leads).
+FastAPI posts there after every chat message (optional — chat works even if n8n is off).
 
 ---
 
-## 7. Quick test flow
+## 7. Quick test
 
-1. Open http://localhost:5173
-2. Click an example or type:  
-   `I'm looking for a 3-bedroom apartment around Lekki. Budget is around N80 million.`
-3. Bot replies with a grounded response and asks for missing info if needed
-4. Go to **Sales Dashboard** — you should see the lead with qualification score
-5. Click **View** for full detail
-6. If n8n is running, check the webhook execution for the event payload
+1. Chat: *“I'm looking for a 3-bedroom apartment around Lekki. Budget is around N80 million.”*
+2. Bot replies with a grounded answer
+3. Sales Dashboard shows the lead with qualification score
+4. If n8n is active, check the webhook execution
 
 ---
 
-## 8. Architecture reminder
+## Architecture (local)
 
 ```text
-React (5173)  →  FastAPI (8000)  →  PostgreSQL
-                      ↓
-                    n8n (5678)  →  notifications / extra integrations
+React (npm, :5173)
+    → FastAPI (Python, :8000)
+        → MySQL (local, :3306)
+        → n8n (npm, :5678)  [optional notifications]
 ```
-
-- FastAPI owns business state and qualification
-- n8n orchestrates side effects
-- AI extraction is rule-based for MVP (works offline); swap in real LLM later via `app/integrations/ai.py`
 
 ---
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| Frontend “Failed to load leads” | Backend not running or CORS; check port 8000 |
-| `alembic` errors | Ensure Postgres is up and `DATABASE_URL_SYNC` is correct |
-| n8n never receives events | Workflow must be **Active**; path must be `lead-intake` |
-| Import errors in Python | Activate venv and reinstall `requirements.txt` |
+| Problem | Fix |
+|--------|-----|
+| `Access denied for user` | Wrong user/password in `.env` |
+| `Unknown database 'leadbot'` | Run `CREATE DATABASE leadbot ...` |
+| `Can't connect to MySQL` | Ensure MySQL service is running (Windows Services / XAMPP control panel) |
+| Alembic fails | Confirm `DATABASE_URL_SYNC` uses `mysql+pymysql://...` |
+| Frontend can’t reach API | Backend must be on port 8000; Vite proxies `/api` |
+| n8n no events | Workflow must be **Active**; path exactly `lead-intake` |
 
 ---
 
-When everything above works, you’re ready to test on your device and extend n8n workflows.
+Docker is **not** used for local development. You can introduce it later for deployment only.

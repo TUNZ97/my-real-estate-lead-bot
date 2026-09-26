@@ -3,7 +3,6 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -18,12 +17,12 @@ class LeadUpdate(BaseModel):
     budget_max: Optional[Decimal] = None
     currency: Optional[str] = None
     timeframe: Optional[str] = None
-    assigned_to: Optional[UUID] = None
+    assigned_to: Optional[str] = None
 
 
 class LeadResponse(BaseModel):
-    id: UUID
-    customer_id: UUID
+    id: str
+    customer_id: str
     status: str
     intent: Optional[str] = None
     property_type: Optional[str] = None
@@ -36,7 +35,7 @@ class LeadResponse(BaseModel):
     qualification_level: Optional[str] = None
     qualification_score: Optional[int] = None
     urgency: Optional[str] = None
-    assigned_to: Optional[UUID] = None
+    assigned_to: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

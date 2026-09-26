@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -44,11 +43,11 @@ class LeadService:
             offset=offset,
         )
 
-    async def get_lead(self, lead_id: uuid.UUID) -> Optional[Lead]:
+    async def get_lead(self, lead_id: str) -> Optional[Lead]:
         result = await self.session.execute(select(Lead).where(Lead.id == lead_id))
         return result.scalar_one_or_none()
 
-    async def update_lead(self, lead_id: uuid.UUID, payload: LeadUpdate) -> Optional[Lead]:
+    async def update_lead(self, lead_id: str, payload: LeadUpdate) -> Optional[Lead]:
         lead = await self.get_lead(lead_id)
         if not lead:
             return None

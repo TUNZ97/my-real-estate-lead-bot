@@ -1,7 +1,6 @@
 """Lead endpoints."""
 
 from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +32,7 @@ async def list_leads(
 
 @router.get("/{lead_id}", response_model=LeadResponse)
 async def get_lead(
-    lead_id: UUID,
+    lead_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     service = LeadService(session)
@@ -45,7 +44,7 @@ async def get_lead(
 
 @router.patch("/{lead_id}", response_model=LeadResponse)
 async def update_lead(
-    lead_id: UUID,
+    lead_id: str,
     payload: LeadUpdate,
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -58,7 +57,7 @@ async def update_lead(
 
 @router.post("/{lead_id}/qualify", response_model=LeadResponse)
 async def qualify_lead(
-    lead_id: UUID,
+    lead_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     service = LeadService(session)
@@ -88,7 +87,7 @@ async def qualify_lead(
 
 @router.post("/{lead_id}/handoff")
 async def handoff_lead(
-    lead_id: UUID,
+    lead_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     service = LeadService(session)
@@ -97,4 +96,4 @@ async def handoff_lead(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found")
     lead.status = "CONTACTED"
     await session.flush()
-    return {"status": "escalated", "lead_id": str(lead_id)}
+    return {"status": "escalated", "lead_id": lead_id}

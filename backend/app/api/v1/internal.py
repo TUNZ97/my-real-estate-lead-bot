@@ -1,10 +1,6 @@
-"""Internal endpoints for n8n callbacks.
-
-These are called by n8n workflows. Protect with N8N_WEBHOOK_SECRET in production.
-"""
+"""Internal endpoints for n8n callbacks."""
 
 from typing import Any, Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
@@ -25,12 +21,7 @@ def verify_n8n_secret(x_n8n_secret: Optional[str] = Header(None)):
 
 
 class QualifyRequest(BaseModel):
-    lead_id: UUID
-
-
-class UpdateLeadFromExtraction(BaseModel):
-    lead_id: UUID
-    extraction: dict[str, Any]
+    lead_id: str
 
 
 @router.post("/qualify")
@@ -39,7 +30,6 @@ async def internal_qualify(
     session: AsyncSession = Depends(get_db_session),
     _: None = Depends(verify_n8n_secret),
 ):
-    """Called by n8n WF-002 — run deterministic qualification."""
     service = LeadService(session)
     lead = await service.get_lead(body.lead_id)
     if not lead:
@@ -64,7 +54,7 @@ async def internal_qualify(
     await session.flush()
 
     return {
-        "lead_id": str(lead.id),
+        "lead_id": lead.id,
         "score": result.score,
         "qualification": result.qualification_level,
         "urgency": result.urgency,
@@ -74,7 +64,7 @@ async def internal_qualify(
 
 @router.get("/leads/{lead_id}")
 async def internal_get_lead(
-    lead_id: UUID,
+    lead_id: str,
     session: AsyncSession = Depends(get_db_session),
     _: None = Depends(verify_n8n_secret),
 ):
@@ -83,7 +73,7 @@ async def internal_get_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return {
-        "id": str(lead.id),
+        "id": lead.id,
         "status": lead.status,
         "intent": lead.intent,
         "property_type": lead.property_type,
