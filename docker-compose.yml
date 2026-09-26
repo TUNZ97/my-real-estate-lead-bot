@@ -1,35 +1,17 @@
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: leadbot-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: leadbot
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d leadbot"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+# Optional — not required for local development.
+# Local development uses MySQL installed on your PC (see SETUP.md).
+# You may use this later for deployment or team environments.
 
-  # Optional: run n8n via Docker for local development
-  # n8n:
-  #   image: n8nio/n8n:latest
-  #   container_name: leadbot-n8n
-  #   ports:
-  #     - "5678:5678"
-  #   environment:
-  #     - N8N_HOST=localhost
-  #     - N8N_PORT=5678
-  #     - N8N_PROTOCOL=http
-  #     - WEBHOOK_URL=http://localhost:5678/
-  #   volumes:
-  #     - n8n_data:/home/node/.n8n
-
-volumes:
-  postgres_data:
-  # n8n_data:
+# services:
+#   mysql:
+#     image: mysql:8.0
+#     environment:
+#       MYSQL_ROOT_PASSWORD: password
+#       MYSQL_DATABASE: leadbot
+#     ports:
+#       - "3306:3306"
+#     volumes:
+#       - mysql_data:/var/lib/mysql
+#
+# volumes:
+#   mysql_data:

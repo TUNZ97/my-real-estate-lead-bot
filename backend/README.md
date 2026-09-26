@@ -1,48 +1,47 @@
-# Backend — FastAPI
+# Backend — FastAPI + MySQL
 
 Authoritative application layer for the Real Estate Lead Bot.
 
-## Responsibilities
-- API contracts & validation
-- Authentication / authorization
-- Domain logic & lifecycle rules
-- Deterministic qualification
-- Database access (PostgreSQL)
-- Idempotent message processing
+## Database
 
-## Structure
+Local development uses **MySQL** (not PostgreSQL, not Docker).
 
 ```text
-app/
-├── main.py              # FastAPI application entry
-├── config.py            # Settings via pydantic-settings
-├── dependencies.py      # Shared DI
-├── api/                 # Route modules
-├── core/                # Security helpers
-├── db/                  # Session, Base
-├── models/              # SQLAlchemy ORM
-├── schemas/             # Pydantic request/response models
-├── services/            # Business logic
-├── repositories/        # Data access layer
-└── integrations/        # n8n client, AI adapter stubs
+DATABASE_URL=mysql+aiomysql://root:YOUR_PASSWORD@localhost:3306/leadbot
+DATABASE_URL_SYNC=mysql+pymysql://root:YOUR_PASSWORD@localhost:3306/leadbot
+```
+
+Create the database once:
+
+```sql
+CREATE DATABASE leadbot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 ## Run locally
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # or .venv\Scripts\activate on Windows
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 
-# Ensure DATABASE_URL is set (see root .env.example)
+# Ensure backend/.env has correct DATABASE_URL*
+alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 API docs: http://localhost:8000/docs
 
-## Migrations
+## Structure
 
-```bash
-alembic revision --autogenerate -m "description"
-alembic upgrade head
+```text
+app/
+├── main.py
+├── config.py
+├── api/                 # HTTP routes
+├── models/              # SQLAlchemy (MySQL)
+├── schemas/
+├── services/            # Message, lead, extraction, qualification
+├── integrations/        # n8n, AI stubs
+└── db/
 ```
